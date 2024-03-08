@@ -38,11 +38,11 @@ app.get('/clientes', async (req, res) => {
 
 // Rota para cadastrar clientes
 app.post('/clientes', async (req, res) => {
-  const { nome, email, telefone } = req.body;
+  const { nome, email, telefone, coordenada_x, coordenada_y } = req.body;
   try {
     // Executar a consulta SQL para inserir um novo cliente
-    const query = 'INSERT INTO clientes (nome, email, telefone) VALUES ($1, $2, $3)';
-    await pool.query(query, [nome, email, telefone]);
+    const query = 'INSERT INTO clientes (nome, email, telefone, coordenada_x, coordenada_y) VALUES ($1, $2, $3, $4, $5)';
+    await pool.query(query, [nome, email, telefone, coordenada_x, coordenada_y]);
     res.status(201).send('Cliente cadastrado com sucesso!');
   } catch (error) {
     console.error('Erro ao cadastrar cliente:', error);
@@ -50,20 +50,22 @@ app.post('/clientes', async (req, res) => {
   }
 });
 
+
 // Rota para atualizar cliente
 app.put('/clientes/:id', async (req, res) => {
   const id = req.params.id;
-  const { nome, email, telefone } = req.body;
+  const { nome, email, telefone, coordenada_x, coordenada_y } = req.body;
   try {
     // Executar a consulta SQL para atualizar o cliente com o ID especificado
-    const query = 'UPDATE clientes SET nome = $1, email = $2, telefone = $3 WHERE id = $4';
-    await pool.query(query, [nome, email, telefone, id]);
+    const query = 'UPDATE clientes SET nome = $1, email = $2, telefone = $3, coordenada_x = $4, coordenada_y = $5 WHERE id = $6';
+    await pool.query(query, [nome, email, telefone, coordenada_x, coordenada_y, id]);
     res.send(`Cliente com ID ${id} atualizado com sucesso!`);
   } catch (error) {
     console.error('Erro ao atualizar cliente:', error);
     res.status(500).send('Erro interno do servidor');
   }
 });
+
 
 // Rota para deletar cliente
 app.delete('/clientes/:id', async (req, res) => {
