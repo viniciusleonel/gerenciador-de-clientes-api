@@ -55,10 +55,38 @@ app.post('/clientes', async (req, res) => {
 app.put('/clientes/:id', async (req, res) => {
   const id = req.params.id;
   const { nome, email, telefone, coordenada_x, coordenada_y } = req.body;
+  const updateFields = {};
+  const updateValues = [];
+  
+  // Verificar quais campos foram fornecidos pelo usuário e adicioná-los ao objeto de atualização
+  if (nome !== undefined) {
+    updateFields.nome = nome;
+    updateValues.push(nome);
+  }
+  if (email !== undefined) {
+    updateFields.email = email;
+    updateValues.push(email);
+  }
+  if (telefone !== undefined) {
+    updateFields.telefone = telefone;
+    updateValues.push(telefone);
+  }
+  if (coordenada_x !== undefined) {
+    updateFields.coordenada_x = coordenada_x;
+    updateValues.push(coordenada_x);
+  }
+  if (coordenada_y !== undefined) {
+    updateFields.coordenada_y = coordenada_y;
+    updateValues.push(coordenada_y);
+  }
+
+  // Construir a parte SET da consulta SQL dinamicamente com base nos campos fornecidos
+  const setFields = Object.keys(updateFields).map((field, index) => `${field} = $${index + 1}`).join(', ');
+
   try {
     // Executar a consulta SQL para atualizar o cliente com o ID especificado
-    const query = 'UPDATE clientes SET nome = $1, email = $2, telefone = $3, coordenada_x = $4, coordenada_y = $5 WHERE id = $6';
-    await pool.query(query, [nome, email, telefone, coordenada_x, coordenada_y, id]);
+    const query = `UPDATE clientes SET ${setFields} WHERE id = $${updateValues.length + 1}`;
+    await pool.query(query, [...updateValues, id]);
     res.send(`Cliente com ID ${id} atualizado com sucesso!`);
   } catch (error) {
     console.error('Erro ao atualizar cliente:', error);
@@ -80,6 +108,38 @@ app.delete('/clientes/:id', async (req, res) => {
     res.status(500).send('Erro interno do servidor');
   }
 });
+
+// Rota para filtrar um cliente com base no ID, nome ou email
+app.get('/clientes/filtrar', async (req, res) => {
+  const { id, nome, email } = req.query;
+  try {
+    console.log('Filtrando cliente...');
+    // Construir a consulta SQL dinâmica
+    let query = 'SELECT * FROM clientes WHERE id = $1 OR nome = $2 OR email = $3';
+    const values = [id, nome, email];
+
+    // Remover valores indefinidos da consulta
+    const filteredValues = values.filter(value => value !== undefined);
+    console.log('Query:', query);
+    console.log('Values:', filteredValues);
+
+    // Executar a consulta SQL com os valores filtrados
+    const result = await pool.query(query, filteredValues);
+    console.log('Resultados:', result.rows);
+
+    // Verificar se algum cliente foi encontrado
+    if (result.rowCount === 0) {
+      res.status(404).send('Cliente não encontrado');
+    } else {
+      res.json(result.rows[0]);
+    }
+  } catch (error) {
+    console.error('Erro ao filtrar cliente:', error);
+    res.status(500).send('Erro interno do servidor');
+  }
+});
+
+
 
 // Rota para listar um cliente específico
 app.get('/clientes/:id', async (req, res) => {
