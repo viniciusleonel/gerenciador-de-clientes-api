@@ -103,6 +103,60 @@ app.get('/clientes/:id', async (req, res) => {
   }
 });
 
+// Função para calcular a distância entre dois pontos
+function calcularDistancia(ponto1, ponto2) {
+  return Math.sqrt(Math.pow((ponto2.coordenada_x - ponto1.coordenada_x), 2) + Math.pow((ponto2.coordenada_y - ponto1.coordenada_y), 2));
+}
+
+// Função para calcular a rota mais curta usando força bruta
+function calcularRotaMaisCurta(clientes) {
+  let menorDistancia = Infinity;
+  let melhorRota = [];
+
+  function permutar(array, inicio = 0) {
+      if (inicio === array.length - 1) {
+          let distanciaTotal = 0;
+          for (let i = 0; i < array.length - 1; i++) {
+              distanciaTotal += calcularDistancia(array[i], array[i + 1]);
+          }
+          distanciaTotal += calcularDistancia(array[array.length - 1], array[0]); // voltando para o início
+          if (distanciaTotal < menorDistancia) {
+              menorDistancia = distanciaTotal;
+              melhorRota = array.slice();
+          }
+      } else {
+          for (let i = inicio; i < array.length; i++) {
+              [array[inicio], array[i]] = [array[i], array[inicio]];
+              permutar(array, inicio + 1);
+              [array[inicio], array[i]] = [array[i], array[inicio]];
+          }
+      }
+  }
+
+  permutar(clientes);
+
+  return { rota: melhorRota, distancia: menorDistancia };
+}
+
+// Rota para calcular a rota mais curta
+app.get('/calcular-rota', async (req, res) => {
+try {
+  // Executar a consulta SQL para buscar todos os clientes
+  const query = 'SELECT * FROM clientes';
+  const result = await pool.query(query);
+  const clientes = result.rows;
+
+  // Calcular a rota mais curta
+  const rotaCalculada = calcularRotaMaisCurta(clientes);
+  
+  // Retornar a rota calculada como resposta da API
+  res.json(rotaCalculada);
+} catch (error) {
+  console.error('Erro ao calcular a rota:', error);
+  res.status(500).send('Erro interno do servidor');
+}
+});
+
 // Iniciar o servidor
 const port = 3001; // Porta alterada para 3001
 app.listen(port, () => {
