@@ -109,35 +109,64 @@ app.delete('/clientes/:id', async (req, res) => {
   }
 });
 
-// Rota para filtrar um cliente com base no ID, nome ou email
+
+
+// Rota para filtrar clientes com base em parâmetros de consulta
 app.get('/clientes/filtrar', async (req, res) => {
   const { id, nome, email } = req.query;
+
   try {
     console.log('Filtrando cliente...');
+
+    // Inicializar um array para armazenar as cláusulas WHERE da consulta SQL
+    const whereClauses = [];
+    const values = [];
+
+    // Adicionar cláusulas WHERE para os parâmetros fornecidos
+    if (id) {
+      whereClauses.push('id = $' + (values.length + 1));
+      values.push(id);
+    }
+    if (nome) {
+      // Converter o nome para minúsculas para comparação insensível a maiúsculas e minúsculas
+      const lowerCaseNome = nome.toLowerCase();
+      // Adicionar cláusula WHERE para o nome (insensível a maiúsculas e minúsculas)
+      whereClauses.push('LOWER(nome) = $' + (values.length + 1));
+      values.push(lowerCaseNome);
+    }
+    if (email) {
+      whereClauses.push('email = $' + (values.length + 1));
+      values.push(email);
+    }
+
+    // Verificar se pelo menos um parâmetro foi fornecido
+    if (whereClauses.length === 0) {
+      res.status(400).send('É necessário fornecer pelo menos um parâmetro para filtrar');
+      return;
+    }
+
     // Construir a consulta SQL dinâmica
-    let query = 'SELECT * FROM clientes WHERE id = $1 OR nome = $2 OR email = $3';
-    const values = [id, nome, email];
-
-    // Remover valores indefinidos da consulta
-    const filteredValues = values.filter(value => value !== undefined);
+    const query = 'SELECT * FROM clientes WHERE ' + whereClauses.join(' OR ');
     console.log('Query:', query);
-    console.log('Values:', filteredValues);
+    console.log('Values:', values);
 
-    // Executar a consulta SQL com os valores filtrados
-    const result = await pool.query(query, filteredValues);
+    // Executar a consulta SQL com os valores fornecidos
+    const result = await pool.query(query, values);
     console.log('Resultados:', result.rows);
 
     // Verificar se algum cliente foi encontrado
     if (result.rowCount === 0) {
       res.status(404).send('Cliente não encontrado');
     } else {
-      res.json(result.rows[0]);
+      res.json(result.rows);
     }
   } catch (error) {
     console.error('Erro ao filtrar cliente:', error);
     res.status(500).send('Erro interno do servidor');
   }
 });
+
+
 
 
 
@@ -173,49 +202,70 @@ function calcularRotaMaisCurta(clientes) {
   let menorDistancia = Infinity;
   let melhorRota = [];
 
-  function permutar(array, inicio = 0) {
-      if (inicio === array.length - 1) {
-          let distanciaTotal = 0;
-          for (let i = 0; i < array.length - 1; i++) {
-              distanciaTotal += calcularDistancia(array[i], array[i + 1]);
-          }
-          distanciaTotal += calcularDistancia(array[array.length - 1], array[0]); // voltando para o início
-          if (distanciaTotal < menorDistancia) {
-              menorDistancia = distanciaTotal;
-              melhorRota = array.slice();
-          }
-      } else {
-          for (let i = inicio; i < array.length; i++) {
-              [array[inicio], array[i]] = [array[i], array[inicio]];
-              permutar(array, inicio + 1);
-              [array[inicio], array[i]] = [array[i], array[inicio]];
-          }
-      }
+  // Encontrar a empresa (cliente com coordenadas x = 0 e y = 0)
+  const empresa = clientes.find(cliente => cliente.coordenada_x === 0 && cliente.coordenada_y === 0);
+
+  if (!empresa) {
+    console.error('Empresa não encontrada');
+    return { rota: [], distancia: 0 }; // Retorna rota vazia e distância zero se empresa não for encontrada
   }
 
-  permutar(clientes);
+  // Remover a empresa da lista de clientes temporariamente para calcular a rota sem ela
+  const clientesSemEmpresa = clientes.filter(cliente => cliente !== empresa);
+
+  function permutar(array, inicio = 0) {
+    if (inicio === array.length - 1) {
+      let distanciaTotal = 0;
+      for (let i = 0; i < array.length - 1; i++) {
+        distanciaTotal += calcularDistancia(array[i], array[i + 1]);
+      }
+      distanciaTotal += calcularDistancia(array[array.length - 1], array[0]); // voltando para o início
+      if (distanciaTotal < menorDistancia) {
+        menorDistancia = distanciaTotal;
+        melhorRota = array.slice();
+      }
+    } else {
+      for (let i = inicio; i < array.length; i++) {
+        [array[inicio], array[i]] = [array[i], array[inicio]];
+        permutar(array, inicio + 1);
+        [array[inicio], array[i]] = [array[i], array[inicio]];
+      }
+    }
+  }
+
+  // Adicionar a empresa no início e no final da rota
+  melhorRota.push(empresa);
+
+  permutar(clientesSemEmpresa);
+
+  // Adicionar a empresa novamente para formar um ciclo completo
+  melhorRota.unshift(empresa);
+  melhorRota.push(empresa);
 
   return { rota: melhorRota, distancia: menorDistancia };
 }
 
+
+
 // Rota para calcular a rota mais curta
 app.get('/calcular-rota', async (req, res) => {
-try {
-  // Executar a consulta SQL para buscar todos os clientes
-  const query = 'SELECT * FROM clientes';
-  const result = await pool.query(query);
-  const clientes = result.rows;
+  try {
+    // Executar a consulta SQL para buscar todos os clientes
+    const query = 'SELECT * FROM clientes';
+    const result = await pool.query(query);
+    const clientes = result.rows;
 
-  // Calcular a rota mais curta
-  const rotaCalculada = calcularRotaMaisCurta(clientes);
-  
-  // Retornar a rota calculada como resposta da API
-  res.json(rotaCalculada);
-} catch (error) {
-  console.error('Erro ao calcular a rota:', error);
-  res.status(500).send('Erro interno do servidor');
-}
+    // Calcular a rota mais curta
+    const rotaCalculada = calcularRotaMaisCurta(clientes);
+    
+    // Retornar a rota calculada como resposta da API
+    res.json(rotaCalculada);
+  } catch (error) {
+    console.error('Erro ao calcular a rota:', error);
+    res.status(500).send('Erro interno do servidor');
+  }
 });
+
 
 // Iniciar o servidor
 const port = 3001; // Porta alterada para 3001
